@@ -7,15 +7,3 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python server.py
     healthCheckPath: /health
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: shared-shopping-list-db
-          property: connectionString
-
-databases:
-  - name: shared-shopping-list-db
-    databaseName: shared_shopping_list
-    user: shopping_list
-    plan: free
-    region: oregon

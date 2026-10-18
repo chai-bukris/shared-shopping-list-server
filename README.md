@@ -1,6 +1,6 @@
 # Shared Shopping List server
 
-A small HTTP server implemented with Python's standard-library sockets. It stores items in Render Postgres using Psycopg 3.
+A small HTTP server implemented with Python's standard-library sockets. If `DATABASE_URL` is set, it stores items in PostgreSQL using Psycopg 3. Without that variable, it uses temporary in-memory storage so the web service can run by itself.
 
 ## API
 
@@ -9,11 +9,11 @@ A small HTTP server implemented with Python's standard-library sockets. It store
 - `REMOVE /api/items` — removes the submitted comma-separated items.
 - `GET /health` — returns `ok` for Render's health check.
 
-The server listens on `0.0.0.0` and uses the `PORT` environment variable supplied by Render. It reads the database connection string from `DATABASE_URL` and creates the `shopping_items` table on startup.
+The server listens on `0.0.0.0` and uses the `PORT` environment variable supplied by Render. When `DATABASE_URL` points to a PostgreSQL database, it creates the `shopping_items` table on startup.
 
 ## Run locally
 
-Set `DATABASE_URL` to a PostgreSQL connection string before starting the server.
+To use persistent storage locally, set `DATABASE_URL` to a PostgreSQL connection string before starting the server. Without it, the list is kept in memory only.
 
 ```sh
 python server.py
@@ -23,7 +23,7 @@ The default local port is `8000`. The Android app's API base URL should then be 
 
 ## Deploy to Render
 
-Create a **Blueprint** from this repository's `main` branch. The included `render.yaml` creates both the free web service and a free Render Postgres database, then connects them through `DATABASE_URL`. After deployment, Render provides an HTTPS URL such as `https://shared-shopping-list-api.onrender.com`.
+Create a **Web Service** from this repository's `main` branch and choose the Free plan. The included `render.yaml` now defines only the Python web service; it does not create a Render database. Render provides an HTTPS URL after deployment.
 
 Set `BASE_URL` in the Android app's `ApiClient.java` to that URL with `/api/` at the end, for example:
 
@@ -33,8 +33,12 @@ private static final String BASE_URL = "https://shared-shopping-list-api.onrende
 
 The Render URL is assigned by Render and may differ from the example.
 
-## Free-plan limits
+## Persistent storage option
 
-Render's free Postgres database expires 30 days after creation. After expiry it becomes inaccessible, and Render deletes it after a further 14-day grace period unless it is upgraded. The free database has 1 GB of storage and no backups. See Render's current free-plan limits before using it for anything important.
+For persistent storage, create a PostgreSQL project with a provider such as Supabase, copy its connection string, and add it to the Render web service as the `DATABASE_URL` environment variable. On restart, the server automatically creates its table if it does not exist.
+
+Supabase's Free projects can pause after a week of low activity. A paused project can be resumed with its data for up to one year. The Free plan currently includes 500 MB per database and no automatic backups. See Supabase's current [free-plan details](https://supabase.com/pricing) and [pause behavior](https://supabase.com/docs/guides/platform/free-project-pausing).
+
+Without `DATABASE_URL`, Render's in-memory list is lost when the free web service spins down or restarts.
 
 The endpoint currently has no authentication, so anyone who knows the service URL can view and change the list. Do not use it for private data.

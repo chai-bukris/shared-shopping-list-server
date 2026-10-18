@@ -2,12 +2,15 @@
 
 import os
 import socketserver
+import threading
 from urllib.parse import urlsplit
 
 import psycopg
 
 
 MAX_BODY_BYTES = 64 * 1024
+memory_items = []
+memory_items_lock = threading.Lock()
 
 
 class ShoppingListHandler(socketserver.StreamRequestHandler):
@@ -48,11 +51,17 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
             if method == "GET" and path == "/health":
                 self.respond(200, "ok")
             elif path == "/api/items" and method == "GET":
-                with psycopg.connect(database_url()) as connection:
-                    rows = connection.execute(
-                        "SELECT item FROM shopping_items ORDER BY id"
-                    ).fetchall()
-                response = "\n".join(row[0] for row in rows)
+                url = database_url()
+                if url:
+                    with psycopg.connect(url) as connection:
+                        rows = connection.execute(
+                            "SELECT item FROM shopping_items ORDER BY id"
+                        ).fetchall()
+                    found_items = [row[0] for row in rows]
+                else:
+                    with memory_items_lock:
+                        found_items = list(memory_items)
+                response = "\n".join(found_items)
                 self.respond(200, response)
             elif path == "/api/items" and method == "ADD":
                 try:
@@ -63,10 +72,15 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                 if not item.strip():
                     self.respond(400, "Item cannot be empty")
                     return
-                with psycopg.connect(database_url()) as connection:
-                    connection.execute(
-                        "INSERT INTO shopping_items (item) VALUES (%s)", (item,)
-                    )
+                url = database_url()
+                if url:
+                    with psycopg.connect(url) as connection:
+                        connection.execute(
+                            "INSERT INTO shopping_items (item) VALUES (%s)", (item,)
+                        )
+                else:
+                    with memory_items_lock:
+                        memory_items.append(item)
                 self.respond(201, "added")
             elif path == "/api/items" and method == "REMOVE":
                 try:
@@ -74,14 +88,21 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                 except UnicodeDecodeError:
                     self.respond(400, "Body must be UTF-8")
                     return
-                with psycopg.connect(database_url()) as connection:
-                    for item in requested:
-                        connection.execute(
-                            "DELETE FROM shopping_items WHERE id = "
-                            "(SELECT id FROM shopping_items WHERE item = %s "
-                            "ORDER BY id LIMIT 1)",
-                            (item,),
-                        )
+                url = database_url()
+                if url:
+                    with psycopg.connect(url) as connection:
+                        for item in requested:
+                            connection.execute(
+                                "DELETE FROM shopping_items WHERE id = "
+                                "(SELECT id FROM shopping_items WHERE item = %s "
+                                "ORDER BY id LIMIT 1)",
+                                (item,),
+                            )
+                else:
+                    with memory_items_lock:
+                        for item in requested:
+                            if item in memory_items:
+                                memory_items.remove(item)
                 self.respond(200, "removed")
             else:
                 self.respond(404 if path not in ("/api/items", "/health") else 405,
@@ -123,14 +144,15 @@ def main():
 
 
 def database_url():
-    value = os.environ.get("DATABASE_URL")
-    if not value:
-        raise RuntimeError("DATABASE_URL is not set")
-    return value
+    return os.environ.get("DATABASE_URL")
 
 
 def initialize_database():
-    with psycopg.connect(database_url(), connect_timeout=15) as connection:
+    url = database_url()
+    if not url:
+        print("DATABASE_URL is not set; using temporary in-memory storage", flush=True)
+        return
+    with psycopg.connect(url, connect_timeout=15) as connection:
         connection.execute(
             "CREATE TABLE IF NOT EXISTS shopping_items ("
             "id BIGSERIAL PRIMARY KEY, item TEXT NOT NULL)"
