@@ -2,12 +2,11 @@
 
 import os
 import socketserver
-import threading
 from urllib.parse import urlsplit
 
+import psycopg
 
-items = []
-items_lock = threading.Lock()
+
 MAX_BODY_BYTES = 64 * 1024
 
 
@@ -49,8 +48,11 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
             if method == "GET" and path == "/health":
                 self.respond(200, "ok")
             elif path == "/api/items" and method == "GET":
-                with items_lock:
-                    response = "\n".join(items)
+                with psycopg.connect(database_url()) as connection:
+                    rows = connection.execute(
+                        "SELECT item FROM shopping_items ORDER BY id"
+                    ).fetchall()
+                response = "\n".join(row[0] for row in rows)
                 self.respond(200, response)
             elif path == "/api/items" and method == "ADD":
                 try:
@@ -61,8 +63,10 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                 if not item.strip():
                     self.respond(400, "Item cannot be empty")
                     return
-                with items_lock:
-                    items.append(item)
+                with psycopg.connect(database_url()) as connection:
+                    connection.execute(
+                        "INSERT INTO shopping_items (item) VALUES (%s)", (item,)
+                    )
                 self.respond(201, "added")
             elif path == "/api/items" and method == "REMOVE":
                 try:
@@ -70,21 +74,29 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                 except UnicodeDecodeError:
                     self.respond(400, "Body must be UTF-8")
                     return
-                with items_lock:
+                with psycopg.connect(database_url()) as connection:
                     for item in requested:
-                        if item in items:
-                            items.remove(item)
+                        connection.execute(
+                            "DELETE FROM shopping_items WHERE id = "
+                            "(SELECT id FROM shopping_items WHERE item = %s "
+                            "ORDER BY id LIMIT 1)",
+                            (item,),
+                        )
                 self.respond(200, "removed")
             else:
                 self.respond(404 if path not in ("/api/items", "/health") else 405,
                              "Not found" if path not in ("/api/items", "/health") else "Method not allowed")
+        except psycopg.Error as error:
+            print(f"Postgres request failed: {error}", flush=True)
+            self.respond(503, "Database unavailable")
         except (ConnectionError, OSError):
             # Clients may close a connection while the server is responding.
             return
 
     def respond(self, status, message):
         phrases = {200: "OK", 201: "Created", 400: "Bad Request", 404: "Not Found",
-                   405: "Method Not Allowed", 413: "Payload Too Large"}
+                   405: "Method Not Allowed", 413: "Payload Too Large",
+                   503: "Service Unavailable"}
         payload = message.encode("utf-8")
         response = (
             f"HTTP/1.1 {status} {phrases.get(status, 'Error')}\r\n"
@@ -103,10 +115,27 @@ class ThreadingHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 def main():
+    initialize_database()
     port = int(os.environ.get("PORT", "8000"))
     server = ThreadingHTTPServer(("0.0.0.0", port), ShoppingListHandler)
     print(f"Shopping list server listening on 0.0.0.0:{port}", flush=True)
     server.serve_forever()
+
+
+def database_url():
+    value = os.environ.get("DATABASE_URL")
+    if not value:
+        raise RuntimeError("DATABASE_URL is not set")
+    return value
+
+
+def initialize_database():
+    with psycopg.connect(database_url(), connect_timeout=15) as connection:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS shopping_items ("
+            "id BIGSERIAL PRIMARY KEY, item TEXT NOT NULL)"
+        )
+    print("Shopping list database is ready", flush=True)
 
 
 if __name__ == "__main__":
