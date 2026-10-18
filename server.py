@@ -72,7 +72,6 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                     return
                 with items_lock:
                     for item in requested:
-                        item = item.strip()
                         if item in items:
                             items.remove(item)
                 self.respond(200, "removed")
