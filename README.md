@@ -1,44 +1,51 @@
-# Shared Shopping List server
+# Shared Shopping List
 
-A small HTTP server implemented with Python's standard-library sockets. If `DATABASE_URL` is set, it stores items in PostgreSQL using Psycopg 3. Without that variable, it uses temporary in-memory storage so the web service can run by itself.
+A shared household shopping list with an Android app and a small Python socket server. The app lets people add missing items as plain text, view the shared list, select items, and remove purchased items.
 
-## API
+## Repository layout
 
-- `GET /api/items` — returns one item per line as UTF-8 plain text.
-- `ADD /api/items` — adds the raw UTF-8 request body as one item.
-- `REMOVE /api/items` — removes the submitted comma-separated items.
+- `android-app/` — the Java/XML Android Studio project.
+- `server.py`, `requirements.txt` — the Python HTTP server and its dependency list.
+- `render.yaml` — Render's configuration for the Python web service. Render builds and starts the server from the repository root; it does not build the Android project.
+
+## Android app
+
+Open the `android-app/` folder in Android Studio. The app requires Android 7.0 (API 24) or newer and an internet connection. Its server address is configured in `android-app/app/src/main/java/com/example/sharedshoppinglist/ApiClient.java`.
+
+To build and install from Android Studio, select a connected Android device and click **Run**. To build a debug APK, use **Build > Build APK(s)**. The APK is generated at:
+
+```text
+android-app/app/build/outputs/apk/debug/app-debug.apk
+```
+
+The generated APK and machine-specific Android Studio settings are not committed to this repository.
+
+## Server API
+
+- `GET /api/items` — returns the items as UTF-8 text, one item per line.
+- `POST /api/items` — adds the raw UTF-8 request body as one item.
+- `DELETE /api/items` — removes the submitted comma-separated items.
 - `GET /health` — returns `ok` for Render's health check.
 
-The server listens on `0.0.0.0` and uses the `PORT` environment variable supplied by Render. When `DATABASE_URL` points to a PostgreSQL database, it creates the `shopping_items` table on startup.
+The server also accepts the older `ADD` and `REMOVE` methods for compatibility. The Android app uses `POST` and `DELETE`.
 
-## Run locally
+## Database and server configuration
 
-To use persistent storage locally, set `DATABASE_URL` to a PostgreSQL connection string before starting the server. Without it, the list is kept in memory only.
+The server listens on `0.0.0.0` and uses the `PORT` environment variable provided by Render. When `DATABASE_URL` is set to a PostgreSQL connection string, the server creates the `shopping_items` table if needed and stores items in PostgreSQL. The live database is hosted separately (currently Supabase); database contents and credentials are not stored in GitHub. Without `DATABASE_URL`, the server falls back to temporary in-memory storage, which is lost when the service restarts.
+
+## Run the server locally
+
+Install dependencies and set `DATABASE_URL` to a PostgreSQL connection string if persistent storage is desired, then run:
 
 ```sh
+pip install -r requirements.txt
 python server.py
 ```
 
-The default local port is `8000`. The Android app's API base URL should then be `http://10.0.2.2:8000/api/` when using the Android emulator. For a physical phone, use the computer's LAN IP address instead of `10.0.2.2`.
+The default local port is `8000`. An Android emulator can reach the host computer at `http://10.0.2.2:8000/api/`. For a physical phone, use the computer's LAN IP address instead.
 
-## Deploy to Render
+## Render deployment
 
-Create a **Web Service** from this repository's `main` branch and choose the Free plan. The included `render.yaml` now defines only the Python web service; it does not create a Render database. Render provides an HTTPS URL after deployment.
+Render deploys the Python service from the repository root using `render.yaml`. Set `DATABASE_URL` in the Render service's environment settings; do not commit database credentials. The current Android app URL is `https://shared-shopping-list-server.onrender.com/api/`.
 
-Set `BASE_URL` in the Android app's `ApiClient.java` to that URL with `/api/` at the end, for example:
-
-```java
-private static final String BASE_URL = "https://shared-shopping-list-api.onrender.com/api/";
-```
-
-The Render URL is assigned by Render and may differ from the example.
-
-## Persistent storage option
-
-For persistent storage, create a PostgreSQL project with a provider such as Supabase, copy its connection string, and add it to the Render web service as the `DATABASE_URL` environment variable. On restart, the server automatically creates its table if it does not exist.
-
-Supabase's Free projects can pause after a week of low activity. A paused project can be resumed with its data for up to one year. The Free plan currently includes 500 MB per database and no automatic backups. See Supabase's current [free-plan details](https://supabase.com/pricing) and [pause behavior](https://supabase.com/docs/guides/platform/free-project-pausing).
-
-Without `DATABASE_URL`, Render's in-memory list is lost when the free web service spins down or restarts.
-
-The endpoint currently has no authentication, so anyone who knows the service URL can view and change the list. Do not use it for private data.
+The API currently has no authentication. Anyone who knows the service URL can view and change the shared list, so do not store sensitive information in it.
