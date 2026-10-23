@@ -63,7 +63,7 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                         found_items = list(memory_items)
                 response = "\n".join(found_items)
                 self.respond(200, response)
-            elif path == "/api/items" and method == "ADD":
+            elif path == "/api/items" and method in ("ADD", "POST"):
                 try:
                     item = body.decode("utf-8")
                 except UnicodeDecodeError:
@@ -82,7 +82,7 @@ class ShoppingListHandler(socketserver.StreamRequestHandler):
                     with memory_items_lock:
                         memory_items.append(item)
                 self.respond(201, "added")
-            elif path == "/api/items" and method == "REMOVE":
+            elif path == "/api/items" and method in ("REMOVE", "DELETE"):
                 try:
                     requested = body.decode("utf-8").split(",")
                 except UnicodeDecodeError:
