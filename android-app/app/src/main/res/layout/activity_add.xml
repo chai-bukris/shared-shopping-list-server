@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical"
+    android:background="#F5F7F4" android:padding="24dp">
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="מה חסר בבית?" android:textColor="#21372E" android:textSize="28sp"
+        android:textStyle="bold" android:layout_marginTop="20dp" android:layout_marginBottom="8dp" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="אפשר לכתוב מוצר, כמות או כל הערה" android:textColor="#607269"
+        android:textSize="15sp" android:layout_marginBottom="20dp" />
+    <com.google.android.material.textfield.TextInputLayout android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:hint="לדוגמה: 2 חלב">
+        <com.google.android.material.textfield.TextInputEditText android:id="@+id/itemInput"
+            android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:inputType="textCapSentences" android:maxLines="3"
+            android:textColor="#21372E" android:textColorHint="#607269" />
+    </com.google.android.material.textfield.TextInputLayout>
+    <com.google.android.material.button.MaterialButton android:id="@+id/submitButton"
+        android:layout_width="match_parent" android:layout_height="58dp" android:text="הוסף לרשימה"
+        android:textSize="17sp" android:layout_marginTop="20dp" />
+    <com.google.android.material.button.MaterialButton android:id="@+id/backHomeButton"
+        android:layout_width="match_parent" android:layout_height="52dp"
+        android:text="חזרה למסך הבית" android:textColor="#21372E"
+        android:backgroundTint="#E1E9E4" android:layout_marginTop="8dp" />
+    <ProgressBar android:id="@+id/progressBar" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:layout_gravity="center_horizontal"
+        android:layout_margin="16dp" android:visibility="gone" />
+</LinearLayout>
